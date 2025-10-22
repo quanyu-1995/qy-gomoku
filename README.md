@@ -9,7 +9,7 @@ forge install foundry-rs/forge-std
 forge install OpenZeppelin/openzeppelin-contracts
 
 ## qy-gomoku-ui
-前端页面
+前端页面部分
 
 需要安装的依赖
 npm install ethers

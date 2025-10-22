@@ -1,8 +1,10 @@
 import { ethers } from 'ethers';
 
 const contractABI = [
-    //mint代币
-    'function mint(address to, uint256 amount)',
+    //用ETH兑换代币（1:1)
+    'function mintWithEth() payable',
+    //用代币兑换回ETH（1:1）
+    'function burnToEth(uint256 tokenAmount)',
     //查询余额
     'function balanceOf(address account) view returns (uint256)',
     //创建游戏
@@ -21,7 +23,7 @@ const contractABI = [
     'function approve(address spender, uint256 value) returns (bool)'
 ];
 
-const contractAddress = '0x0d9268366c04386c05c3901e755ac82B2E002200';
+const contractAddress = '0x174652e21e1c73356470b4bc0ccdf089d1520d25';
 
 const elements = {
   connect: document.getElementById('connect'),
@@ -44,7 +46,7 @@ const elements = {
   trySettle: document.getElementById('trySettle'),
   settleGameId: document.getElementById('settleGameId'),
   refreshBalance: document.getElementById('refreshBalance'),
-  mintAddress: document.getElementById('mintAddress'),
+  mintAmount: document.getElementById('mintAmount'),
   mint: document.getElementById('mint'),
   grid: document.getElementById('grid')
 };
@@ -86,10 +88,9 @@ async function refreshBalance() {
 
 async function mint() {
   if (!contract) return alert('先连接钱包');
-  const to = elements.mintAddress.value;
-  const amount = ethers.parseUnits('1000', 18); // Mint 1000 tokens
+  const amount = elements.mintAmount.value;
   try {
-    const tx = await contract.mint(to, amount);
+    const tx = await contract.mintWithEth({value: amount});
     alert('Mint交易已发送: ' + tx.hash);
     await tx.wait();
     alert('Mint成功');

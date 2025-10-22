@@ -1,7 +1,6 @@
 .env
-
+qy-gomoku-contract/broadcast/
 qy-gomoku-contract/cache/
 qy-gomoku-contract/out/
 qy-gomoku-contract/lib/
-
 qy-gomoku-ui/node_modules/
