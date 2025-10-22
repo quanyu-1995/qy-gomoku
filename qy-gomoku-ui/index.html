@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>On-chain Gomoku — Frontend</title>
+  <link rel="stylesheet" href="./src/css/style.css" />
+    <link rel="stylesheet" href="./src/css/style.css" />
+    <script type="module" src="./src/js/app.js"></script>
+</head>
+<body>
+  <header>
+    <h1>链上五子棋（测试版）</h1>
+    <div id="wallet">
+      <button id="connect">连接钱包</button>
+      <span id="address">未连接</span>
+      <span id="balance">余额: -</span>
+    </div>
+  </header>
+
+  <main>
+    <section id="actions">
+      <h2>合约交互</h2>
+      <div class="row">
+        <label>合约地址:</label>
+        <code id="contractAddress"></code>
+      </div>
+
+      <div class="row">
+        <label>创建游戏 - 押注:</label>
+        <input id="createStake" type="number" value="1" min="0" />
+        <label>间隔时间(s):</label>
+        <input id="createInterval" type="number" value="60" min="1" />
+        <button id="createGame">创建游戏</button>
+      </div>
+
+      <div class="row">
+        <label>分页查找可加入游戏 (page,pageSize):</label>
+        <input id="page" type="number" value="1" min="1" />
+        <input id="pageSize" type="number" value="10" min="1" />
+        <button id="listGames">列出</button>
+      </div>
+
+      <div id="gamesList" class="box"></div>
+
+      <div class="row">
+        <label>加入游戏 ID:</label>
+        <input id="joinGameId" type="number" />
+        <button id="joinGame">加入游戏</button>
+      </div>
+
+      <div class="row">
+        <label>落子 (gameId, x, y):</label>
+        <input id="placeGameId" type="number" placeholder="gameId" />
+        <input id="coordX" type="number" min="0" max="14" value="7" />
+        <input id="coordY" type="number" min="0" max="14" value="7" />
+        <button id="placeStone">落子</button>
+      </div>
+
+      <div class="row">
+        <label>尝试结算超时游戏 ID:</label>
+        <input id="settleGameId" type="number" />
+        <button id="trySettle">尝试结算</button>
+      </div>
+      
+      <div class="row">
+        <label>mint代币：</label>
+        <input id="mintAddress" type="text" />
+        <button id="mint">mint</button>
+      </div>
+
+      <div class="row">
+        <button id="refreshBalance">刷新余额</button>
+      </div>
+
+    </section>
+
+    <section id="board">
+      <h2>棋盘（仅本地展示，点击会填充落子输入）</h2>
+      <div id="grid"></div>
+    </section>
+  </main>
+
+  <footer>
+    <small>注意：这是测试用的简单 UI。执行写操作会在链上发送交易并消耗 gas。</small>
+  </footer>
+
+  <script type="module" src="./src/js/app.js"></script>
+</body>
+</html>

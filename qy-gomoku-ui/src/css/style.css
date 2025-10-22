@@ -1,0 +1,16 @@
+*{box-sizing:border-box}
+body{font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Arial;max-width:1100px;margin:18px auto;padding:12px}
+header{display:flex;align-items:center;justify-content:space-between}
+#wallet{display:flex;gap:10px;align-items:center}
+main{display:flex;gap:18px;margin-top:18px}
+#actions{flex:1}
+#board{width:520px}
+.row{display:flex;gap:8px;align-items:center;margin:8px 0}
+.box{padding:8px;border:1px solid #ddd;border-radius:6px;background:#fafafa}
+#grid{display:grid;grid-template-columns:repeat(15,1fr);gap:2px;background:#333;padding:6px;border-radius:6px}
+.cell{width:30px;height:30px;background:#f0d9b5;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cell.black{background:#111}
+.cell.white{background:#fff}
+button{padding:6px 10px;border-radius:6px;border:1px solid #888;background:#eee;cursor:pointer}
+code{background:#f2f2f2;padding:4px 6px;border-radius:4px}
+footer{margin-top:18px;color:#666}
