@@ -3,88 +3,298 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>On-chain Gomoku — Frontend</title>
-  <link rel="stylesheet" href="./src/css/style.css" />
-    <link rel="stylesheet" href="./src/css/style.css" />
-    <script type="module" src="./src/js/app.js"></script>
+  <title>链上五子棋</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#8B5CF6', // 主色调：紫色
+            secondary: '#EC4899', // 辅助色：粉色
+            board: '#E6B325', // 棋盘色：木色
+            black: '#000000', // 黑子
+            white: '#FFFFFF', // 白子
+            neutral: {
+              100: '#F3F4F6',
+              200: '#E5E7EB',
+              300: '#D1D5DB',
+              800: '#1F2937',
+              900: '#111827',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .cell-hover {
+        @apply hover:bg-amber-300/50 transition-colors duration-200;
+      }
+      .game-card {
+        @apply bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow duration-300 border border-neutral-200;
+      }
+      .btn-primary {
+        @apply bg-primary hover:bg-primary/90 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200;
+      }
+      .btn-secondary {
+        @apply bg-white hover:bg-neutral-100 text-neutral-800 font-medium py-2 px-4 rounded-md border border-neutral-300 transition-colors duration-200;
+      }
+    }
+  </style>
 </head>
-<body>
-  <header>
-    <h1>链上五子棋（测试版）</h1>
-    <div id="wallet">
-      <button id="connect">连接钱包</button>
-      <span id="address">未连接</span>
-      <span id="balance">余额: -</span>
+<body class="bg-neutral-100 min-h-screen">
+  <header class="bg-white shadow-sm">
+    <div class="container mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center">
+      <div class="flex items-center mb-4 md:mb-0">
+        <i class="fa fa-gamepad text-primary text-2xl mr-2"></i>
+        <h1 class="text-2xl font-bold text-neutral-800">链上五子棋</h1>
+      </div>
+      
+      <div id="wallet" class="flex items-center space-x-4">
+        <span id="balance" class="text-neutral-800 hidden md:inline-block">余额: -</span>
+        <span id="address" class="bg-neutral-100 px-3 py-1 rounded-full text-sm hidden md:inline-block">未连接</span>
+        <button id="connect" class="btn-primary flex items-center">
+          <i class="fa fa-link mr-2"></i>连接钱包
+        </button>
+      </div>
     </div>
   </header>
 
-  <main>
-    <section id="actions">
-      <h2>合约交互</h2>
-      <div class="row">
-        <label>合约地址:</label>
-        <code id="contractAddress"></code>
+  <!-- 导航标签 -->
+  <nav class="bg-white border-b border-neutral-200">
+    <div class="container mx-auto px-4">
+      <div class="flex space-x-8">
+        <button id="lobby-tab" class="py-4 px-1 border-b-2 border-primary text-primary font-medium">
+          <i class="fa fa-users mr-1"></i>游戏大厅
+        </button>
+        <button id="game-tab" class="py-4 px-1 border-b-2 border-transparent text-neutral-500 hover:text-neutral-800 font-medium">
+          <i class="fa fa-gamepad mr-1"></i>进行中的游戏
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container mx-auto px-4 py-8">
+    <!-- 游戏大厅界面 -->
+    <section id="lobby-view" class="space-y-6">
+      <div class="game-card">
+        <h2 class="text-xl font-bold mb-4 text-neutral-800">创建新游戏</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-neutral-700 mb-1">押注数量</label>
+            <input id="createStake" type="number" value="1" min="0" class="w-full px-3 py-2 border border-neutral-300 rounded-md">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-neutral-700 mb-1">思考时间(秒)</label>
+            <input id="createInterval" type="number" value="60" min="10" class="w-full px-3 py-2 border border-neutral-300 rounded-md">
+          </div>
+          <div class="flex items-end">
+            <button id="createGame" class="btn-primary w-full">
+              <i class="fa fa-plus-circle mr-1"></i>创建游戏
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div class="row">
-        <label>创建游戏 - 押注:</label>
-        <input id="createStake" type="number" value="1" min="0" />
-        <label>间隔时间(s):</label>
-        <input id="createInterval" type="number" value="60" min="1" />
-        <button id="createGame">创建游戏</button>
-      </div>
-
-      <div class="row">
-        <label>分页查找可加入游戏 (page,pageSize):</label>
-        <input id="page" type="number" value="1" min="1" />
-        <input id="pageSize" type="number" value="10" min="1" />
-        <button id="listGames">列出</button>
-      </div>
-
-      <div id="gamesList" class="box"></div>
-
-      <div class="row">
-        <label>加入游戏 ID:</label>
-        <input id="joinGameId" type="number" />
-        <button id="joinGame">加入游戏</button>
-      </div>
-
-      <div class="row">
-        <label>落子 (gameId, x, y):</label>
-        <input id="placeGameId" type="number" placeholder="gameId" />
-        <input id="coordX" type="number" min="0" max="14" value="7" />
-        <input id="coordY" type="number" min="0" max="14" value="7" />
-        <button id="placeStone">落子</button>
-      </div>
-
-      <div class="row">
-        <label>尝试结算超时游戏 ID:</label>
-        <input id="settleGameId" type="number" />
-        <button id="trySettle">尝试结算</button>
+      <div>
+        <h2 class="text-xl font-bold mb-4 text-neutral-800">可加入的游戏</h2>
+        <div class="flex mb-4">
+          <div class="mr-4">
+            <label class="block text-sm font-medium text-neutral-700 mb-1">页码</label>
+            <input id="page" type="number" value="1" min="1" class="w-20 px-3 py-2 border border-neutral-300 rounded-md">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-neutral-700 mb-1">每页数量</label>
+            <input id="pageSize" type="number" value="5" min="1" max="20" class="w-20 px-3 py-2 border border-neutral-300 rounded-md">
+          </div>
+          <div class="flex items-end ml-4">
+            <button id="listGames" class="btn-secondary">
+              <i class="fa fa-refresh mr-1"></i>刷新列表
+            </button>
+          </div>
+        </div>
+        <div id="gamesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- 游戏列表将在这里动态生成 -->
+          <div class="text-neutral-500 italic">请点击刷新列表查看可加入的游戏</div>
+        </div>
       </div>
       
-      <div class="row">
-        <label>mint代币：</label>
-        <input id="mintAmount" type="number" />
-        <button id="mint">mint</button>
+      <div class="game-card">
+        <h2 class="text-xl font-bold mb-4 text-neutral-800">加载进行中的游戏</h2>
+        <div class="flex flex-col sm:flex-row gap-4">
+          <div class="flex-grow">
+            <label class="block text-sm font-medium text-neutral-700 mb-1">游戏ID</label>
+            <input id="loadGameId" type="number" min="1" class="w-full px-3 py-2 border border-neutral-300 rounded-md">
+          </div>
+          <div class="flex items-end">
+            <button id="loadGameBtn" class="btn-primary">
+              <i class="fa fa-download mr-1"></i>加载游戏
+            </button>
+          </div>
+        </div>
       </div>
-
-      <div class="row">
-        <button id="refreshBalance">刷新余额</button>
-      </div>
-
     </section>
 
-    <section id="board">
-      <h2>棋盘（仅本地展示，点击会填充落子输入）</h2>
-      <div id="grid"></div>
+    <!-- 对局界面 -->
+    <section id="game-view" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div class="lg:col-span-2">
+        <div class="game-card">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-neutral-800">游戏 #<span id="current-game-id">-</span></h2>
+            <button id="back-to-lobby" class="btn-secondary text-sm">
+              <i class="fa fa-arrow-left mr-1"></i>返回大厅
+            </button>
+          </div>
+          
+          <div class="flex justify-center mb-4">
+            <div id="game-status" class="px-4 py-2 bg-neutral-100 rounded-full text-sm font-medium">
+              等待对方加入...
+            </div>
+          </div>
+          
+          <!-- 棋盘容器 -->
+          <div class="flex justify-center">
+            <div id="grid" class="grid grid-cols-15 gap-0 border border-neutral-800 bg-board p-1"></div>
+          </div>
+          
+          <div class="mt-4 flex justify-between items-center">
+            <div>
+              <span id="current-player" class="inline-block px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+                当前回合: 等待中
+              </span>
+            </div>
+            <div>
+              <span id="time-left" class="inline-block px-3 py-1 bg-neutral-100 rounded-full text-sm font-medium">
+                剩余时间: --:--
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div>
+        <div class="game-card mb-6">
+          <h3 class="text-lg font-bold mb-3 text-neutral-800">游戏信息</h3>
+          <div class="space-y-3 text-sm">
+            <div class="flex justify-between">
+              <span class="text-neutral-500">押注金额:</span>
+              <span id="game-stake" class="font-medium">-</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-neutral-500">创建者:</span>
+              <span id="game-creator" class="font-medium truncate max-w-[180px]">-</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-neutral-500">对手:</span>
+              <span id="game-opponent" class="font-medium truncate max-w-[180px]">-</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-neutral-500">回合时间:</span>
+              <span id="game-interval" class="font-medium">-</span>
+            </div>
+          </div>
+          
+          <div class="mt-4 pt-4 border-t border-neutral-200">
+            <button id="game-settle" class="btn-secondary w-full text-sm">
+              <i class="fa fa-balance-scale mr-1"></i>尝试结算超时游戏
+            </button>
+          </div>
+        </div>
+        
+        <div class="game-card">
+          <h3 class="text-lg font-bold mb-3 text-neutral-800">落子记录</h3>
+          <div id="move-history" class="max-h-64 overflow-y-auto space-y-2 text-sm">
+            <!-- 落子记录将在这里动态生成 -->
+            <div class="text-neutral-500 italic">游戏尚未开始</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 代币操作区 -->
+    <section class="mt-8">
+      <div class="game-card">
+        <h2 class="text-xl font-bold mb-4 text-neutral-800">代币管理</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <h3 class="text-lg font-medium mb-2">Mint 代币 (1:1 ETH)</h3>
+            <div class="flex gap-2">
+              <input id="mintAmount" type="number" step="0.01" class="flex-grow px-3 py-2 border border-neutral-300 rounded-md">
+              <button id="mint" class="btn-primary">
+                <i class="fa fa-plus-circle mr-1"></i>Mint
+              </button>
+            </div>
+          </div>
+          <div>
+            <h3 class="text-lg font-medium mb-2">Burn 代币 (1:1 ETH)</h3>
+            <div class="flex gap-2">
+              <input id="burnAmount" type="number" step="0.01" class="flex-grow px-3 py-2 border border-neutral-300 rounded-md">
+              <button id="burn" class="btn-secondary">
+                <i class="fa fa-minus-circle mr-1"></i>Burn
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4">
+          <button id="refreshBalance" class="btn-secondary">
+            <i class="fa fa-refresh mr-1"></i>刷新余额
+          </button>
+        </div>
+      </div>
     </section>
   </main>
 
-  <footer>
-    <small>注意：这是测试用的简单 UI。执行写操作会在链上发送交易并消耗 gas。</small>
+  <footer class="bg-white border-t border-neutral-200 mt-12 py-6">
+    <div class="container mx-auto px-4 text-center text-neutral-500 text-sm">
+      <p>链上五子棋 &copy; 2023 | 注意：执行操作会在链上发送交易并消耗 gas</p>
+    </div>
   </footer>
 
+  <!-- 通知组件 -->
+  <div id="notification" class="fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center">
+    <i id="notification-icon" class="mr-2"></i>
+    <span id="notification-message"></span>
+  </div>
+
   <script type="module" src="./src/js/app.js"></script>
+  <style>
+    /* 棋盘容器样式 - 关键修复 */
+    #grid {
+      display: grid;          /* 使用网格布局 */
+      grid-template-columns: repeat(15, 1fr); /* 15列平均分配宽度 */
+      width: 450px;           /* 固定宽度（15×30px） */
+      height: 450px;          /* 固定高度，与宽度相等保持正方形 */
+      border: 2px solid #333; /* 棋盘外边框 */
+      margin: 20px auto;      /* 居中显示 */
+    }
+
+    /* 单元格样式优化 */
+    .cell {
+      box-sizing: border-box; /* 边框计入尺寸计算，避免溢出 */
+      width: 30px;            /* 单个单元格尺寸（30×30） */
+      height: 30px;
+    }
+
+    /* 响应式调整（可选） */
+    @media (max-width: 500px) {
+      #grid {
+        width: 300px;
+        height: 300px;
+      }
+      .cell {
+        width: 20px;
+        height: 20px;
+      }
+    }
+  </style>
 </body>
 </html>

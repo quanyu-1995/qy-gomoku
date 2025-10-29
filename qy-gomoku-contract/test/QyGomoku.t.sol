@@ -7,117 +7,180 @@ import "forge-std/console.sol";
 
 contract QyGomokuTest is Test {
     QyGomoku public qyGomoku;
+    address public u1;
+    address public u2;
+    uint256 public gameId;
+    bool public isPrint;
 
     function setUp() public {
+        isPrint = false;
         qyGomoku = new QyGomoku("QuanYu Coin", "QYC");
-    }
-
-    // function test_mint() public {
-    //     qyGomoku.mint(address(1),1);
-    //     qyGomoku.mint(address(this),1);
-    //     assertEq(qyGomoku.balanceOf(address(1)), 1);
-    // }
-
-    function test_fullGame() public {
-        // 0. 准备工作：定义用户地址，给用户 mint 代币
-        address u1 = address(0x1111);
-        address u2 = address(0x2222);
-        
+        u1 = address(0x1111);
+        u2 = address(0x2222);
         // 1. 给用户充值 ETH 用于 mint 代币
         vm.deal(u1, 1 ether); 
         vm.deal(u2, 1 ether); 
-        
-        // 2. 给用户 mint 代币
-        vm.prank(u1);
-        qyGomoku.mintWithEth{value: 1000}(); 
-        assertEq(qyGomoku.balanceOf(u1), 1000); // 验证 mint 成功
-        vm.prank(u2);
-        qyGomoku.mintWithEth{value: 1000}();
-        assertEq(qyGomoku.balanceOf(u2), 1000); // 验证 mint 成功
+    }
 
-        // 3. 用户授权 qyGomoku 合约花费 100 个代币（核心：授权给合约，而非测试合约）
+    function test_fullGame() public {
+        uint256 startGas = gasleft();
+        test_mint();
+        uint256 endGas = gasleft();
+        console.log(unicode"test_mint 操作消耗的 gas:", startGas - endGas);
+
+        startGas = gasleft();
+        test_createGame();
+        endGas = gasleft();
+        console.log(unicode"test_createGame 操作消耗的 gas: %s", startGas - endGas);
+
+        startGas = gasleft();
+        test_joinGame();
+        endGas = gasleft();
+        console.log(unicode"test_joinGame 操作消耗的 gas: %s", startGas - endGas);
+        
+        // test_printGame();
+        
+        startGas = gasleft();
+        test_placeStone();
+        endGas = gasleft();
+        console.log(unicode"test_placeStone 操作消耗的 gas: %s", startGas - endGas);
+
+        console.log("U1 balance:", qyGomoku.balanceOf(u1));
+        console.log("U2 balance:", qyGomoku.balanceOf(u2));
+        console.log("owner balance:", qyGomoku.balanceOf(qyGomoku.owner()));
+    }
+
+    function test_printGame() public {
+        (
+            address creator, address joiner, address currentPlayer,
+            uint256 stake, bool started, bool finished,
+            address winner, uint32 intervalTime, uint32 lastMoveTime
+        ) = qyGomoku.getGame(gameId);
+        console.log("Game Info:");
+        console.log("Creator:", creator);
+        console.log("Joiner:", joiner);
+        console.log("Current Player:", currentPlayer);
+        console.log("Stake:", stake);
+        console.log("Started:", started);
+        console.log("Finished:", finished);
+        console.log("Winner:", winner);
+        console.log("Interval Time:", intervalTime);
+        console.log("Last Move Time:", lastMoveTime);
+        console.log("creator==currentPlayer:", creator==currentPlayer);
+    }
+
+    function test_mint() public {
+        vm.prank(u1);
+        qyGomoku.mintWithEth{value: 1e18}(); 
+        assertEq(qyGomoku.balanceOf(u1), 1e18); // 验证 mint 成功
+        vm.prank(u2);
+        qyGomoku.mintWithEth{value: 1e18}();
+        assertEq(qyGomoku.balanceOf(u2), 1e18); // 验证 mint 成功
+    }
+    
+    function test_approve() public {
         vm.prank(u1);
         qyGomoku.approve(address(qyGomoku), 100); 
         assertEq(qyGomoku.allowance(u1, address(qyGomoku)), 100); // 验证授权成功
         vm.prank(u2);
         qyGomoku.approve(address(qyGomoku), 100); 
         assertEq(qyGomoku.allowance(u2, address(qyGomoku)), 100); // 验证授权成功
-
-        // 4. 以u1身份调用 createGame（确保扣的是用户的代币）
-        vm.prank(u1);
-        qyGomoku.createGame(100, 600);
-        assertEq(qyGomoku.balanceOf(u1), 900); // 剩余900代币
-
-        // 5. 以u2身份调用 joinGame
-        vm.prank(u2);
-        qyGomoku.joinGame(0);
-        assertEq(qyGomoku.balanceOf(u2), 900); // 剩余900代币
-        printBoard();
-
-        // 6.u1和u2轮流落子，直到一方获胜
-        vm.prank(u1);
-        qyGomoku.placeStone(0, 7, 7); // u1下在(7,7)
-        printBoard();
-        vm.prank(u2);
-        qyGomoku.placeStone(0, 7, 8); // u2下在(7,8)
-        printBoard();
-        vm.prank(u1);
-        qyGomoku.placeStone(0, 8, 7); // u1下在(8,7)
-        printBoard();
-        vm.prank(u2);
-        qyGomoku.placeStone(0, 8, 8); // u2下在(8,8)
-        printBoard();
-        vm.prank(u1);
-        qyGomoku.placeStone(0, 9, 7); // u1下在(9,7)
-        printBoard();
-        vm.prank(u2);
-        qyGomoku.placeStone(0, 9, 8); // u2下在(9,8)
-        printBoard();
-        vm.prank(u1);
-        qyGomoku.placeStone(0, 10, 7); // u1下在(10,7)
-        printBoard();
-        vm.prank(u2);
-        qyGomoku.placeStone(0, 10, 8); // u2下在(10,8)
-        printBoard();
-        vm.prank(u1);
-        qyGomoku.placeStone(0, 11, 7); // u1下在(11,7)
-        printBoard();
-        // 打印各方余额
-        console.log("U1 balance:", qyGomoku.balanceOf(u1));
-        console.log("U2 balance:", qyGomoku.balanceOf(u2));
-        console.log("owner balance:", qyGomoku.balanceOf(qyGomoku.owner()));
     }
 
-    function printBoard() internal {
-        (
-            uint256 gameId,
-            address creator,
-            address joiner,
-            address currentPlayer, // 当前轮到谁
-            uint256 stake,
-            bool started,
-            bool finished,
-            address winner,
-            uint8[15][15] memory board, // 15x15棋盘
-            uint256 intervalTime, //间隔时间, 单位：s
-            uint256 lastMoveTime //最后落子时间
-        ) = qyGomoku.getGame(0);
-        console.log("Board:");
-        // 遍历行（外层数组）
-        for (uint256 i = 0; i < 15; i++) {
-            string memory row = ""; // 用于拼接一行的元素
-            // 遍历列（内层数组）
-            for (uint256 j = 0; j < 15; j++) {
-                // 将当前元素转为字符串，拼接到行中（用逗号分隔）
-                string memory cell = '';
-                if(board[i][j] == 1)
-                    cell = "-";
-                else if(board[i][j] == 2)
-                    cell = "*";
-                row = string(abi.encodePacked(row, cell, ", "));
+    function test_createGame() public {
+        vm.prank(u1);
+        gameId = qyGomoku.createGame(1e14, 600);
+        // assertEq(qyGomoku.balanceOf(u1), 900); // 剩余900代币
+    }
+
+    function test_joinGame() public {
+        vm.prank(u2);
+        qyGomoku.joinGame(gameId);
+        // assertEq(qyGomoku.balanceOf(u2), 900); // 剩余900代币
+        printBoard(gameId);
+    }
+
+    function test_placeStone() public {
+        vm.prank(u1);
+        uint256 startGas = gasleft();
+        qyGomoku.placeStone(gameId, 7, 7); // u1下在(7,7)
+        uint256 endGas = gasleft();
+        console.log(unicode"----------placeStone %s, %s gas: %s", 7, 7, startGas - endGas);
+        printBoard(gameId);
+
+        vm.prank(u2);
+        startGas = gasleft();
+        qyGomoku.placeStone(gameId, 7, 8); // u2下在(7,8)
+        endGas = gasleft();
+        console.log(unicode"----------placeStone %s, %s 消耗gas: %s", 7, 8, startGas - endGas);
+        printBoard(gameId);
+
+        vm.prank(u1);
+        startGas = gasleft();
+        qyGomoku.placeStone(gameId, 8, 7); // u1下在(8,7)
+        endGas = gasleft();
+        console.log(unicode"----------placeStone %s, %s gas: %s", 8, 7, startGas - endGas);
+        printBoard(gameId);
+
+        vm.prank(u2);
+        startGas = gasleft();
+        qyGomoku.placeStone(gameId, 8, 8); // u2下在(8,8)
+        endGas = gasleft();
+        console.log(unicode"----------placeStone %s, %s gas: %s", 8, 8, startGas - endGas);
+        printBoard(gameId);
+
+        vm.prank(u1);
+        startGas = gasleft();
+        qyGomoku.placeStone(gameId, 9, 7); // u1下在(9,7)
+        endGas = gasleft();
+        console.log(unicode"----------placeStone %s, %s gas: %s", 9, 7, startGas - endGas);
+        printBoard(gameId);
+
+        vm.prank(u2);
+        startGas = gasleft();
+        qyGomoku.placeStone(gameId, 9, 8); // u2下在(9,8)
+        endGas = gasleft();
+        console.log(unicode"----------placeStone %s, %s gas: %s", 9, 8, startGas - endGas);
+        printBoard(gameId);
+
+        vm.prank(u1);
+        startGas = gasleft();
+        qyGomoku.placeStone(gameId, 10, 7); // u1下在(10,7)
+        endGas = gasleft();
+        console.log(unicode"----------placeStone %s, %s gas: %s", 10, 7, startGas - endGas);
+        printBoard(gameId);
+
+        vm.prank(u2);
+        startGas = gasleft();
+        qyGomoku.placeStone(gameId, 10, 8); // u2下在(10,8)
+        endGas = gasleft();
+        console.log(unicode"----------placeStone %s, %s gas: %s", 10, 8, startGas - endGas);
+        printBoard(gameId);
+
+        vm.prank(u1);
+        startGas = gasleft();
+        qyGomoku.placeStone(gameId, 11, 7); // u1下在(11,7)
+        endGas = gasleft();
+        console.log(unicode"----------placeStone %s, %s gas: %s", 11, 7, startGas - endGas);
+        printBoard(gameId);
+
+    }
+
+    function printBoard(uint256 gameId) internal {
+        if(isPrint){
+            uint8[][] memory boardArr = qyGomoku.getBoard(gameId);
+            for (uint256 i = 0; i < boardArr.length; i++) {
+                string memory row = "";
+                for (uint256 j = 0; j < boardArr[i].length; j++) {
+                    string memory cell = '';
+                    if(boardArr[i][j] == 1)
+                        cell = "-";
+                    else if(boardArr[i][j] == 2)
+                        cell = "*";
+                    row = string(abi.encodePacked(row, cell, ", "));
+                }
+                console.log(row);
             }
-            // 打印一行
-            console.log(row);
         }
     }
 }
