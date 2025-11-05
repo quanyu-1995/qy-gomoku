@@ -212,7 +212,6 @@ contract QyGomoku is ERC20, Ownable {
     }
 
     function checkWin(uint256 gameId, uint8 x, uint8 y, uint8 playerMark) internal view returns (bool) {
-        // 合并方向数组为二维数组，减少1个变量
         int256[4][2] memory dirs = [
             [int256(1), int256(0), int256(1), int256(1)], // dx
             [int256(0), int256(1), int256(1), int256(-1)] // dy
@@ -231,9 +230,8 @@ contract QyGomoku is ERC20, Ownable {
         uint8 newYUint;
 
         for (uint8 dir = 0; dir < 4; dir++) {
-            count = 1; // 重置计数
+            count = 1; 
             
-            // 正方向查找（复用变量）
             for (uint8 step = 1; step < 5; step++) {
                 assembly { stepInt := step }
                 newX = nx + dirs[0][dir] * stepInt;
@@ -250,7 +248,6 @@ contract QyGomoku is ERC20, Ownable {
                 }
             }
             
-            // 反方向查找（复用所有变量）
             for (uint8 step = 1; step < 5; step++) {
                 assembly { stepInt := step }
                 newX = nx - dirs[0][dir] * stepInt;
