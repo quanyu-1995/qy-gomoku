@@ -195,7 +195,7 @@ async function refreshBalance() {
   
   try {
     const balance = await gameState.contract.balanceOf(gameState.currentAccount);
-    elements.balance.textContent = `余额: ${ethers.formatEther(balance)} 代币`;
+    elements.balance.textContent = `余额: ${ethers.formatEther(balance)} QYC`;
   } catch (e) {
     console.error('刷新余额失败:', e);
     showNotification('刷新余额失败', true);
@@ -296,12 +296,12 @@ function updateBoard() {
     cell.innerHTML = '';
     
     // 添加棋子
-    if (value === 1) {
+    if (value == 1) {
       // 创建者的棋子（黑棋）
       const stone = document.createElement('div');
       stone.className = 'absolute inset-1 rounded-full bg-black';
       cell.appendChild(stone);
-    } else if (value === 2) {
+    } else if (value == 2) {
       // 加入者的棋子（白棋，带黑边）
       const stone = document.createElement('div');
       stone.className = 'absolute inset-1 rounded-full bg-white border border-black';
@@ -319,7 +319,7 @@ async function fetchBoardData(gameId) {
     const boardCells = await gameState.contract.getBoard(gameId);
     boardCells.forEach((row, y) => {
       row.forEach((value, x) => {
-        gameState.board[y][x] = value;
+        gameState.board[x][y] = value;
       });
     });
     
@@ -403,7 +403,7 @@ async function listGames() {
           </div>
           <div class="space-y-1 text-sm mb-3">
             <div>创建者: ${game.creator.slice(0, 6)}...${game.creator.slice(-4)}</div>
-            <div>押注: ${ethers.formatEther(game.stake)} 代币</div>
+            <div>押注: ${ethers.formatEther(game.stake)} QYC</div>
             <div>思考时间: ${game.intervalTime}秒</div>
           </div>
           <button class="join-game-btn btn-primary w-full text-sm" data-game-id="${id}">
@@ -495,7 +495,7 @@ async function loadGame(gameId) {
     
     // 更新UI
     elements.currentGameId.textContent = gameId;
-    elements.gameStake.textContent = `${ethers.formatEther(game.stake)} 代币`;
+    elements.gameStake.textContent = `${ethers.formatEther(game.stake)} QYC`;
     elements.gameCreator.textContent = `${game.creator.slice(0, 6)}...${game.creator.slice(-4)}`;
     elements.gameOpponent.textContent = game.joiner ? `${game.joiner.slice(0, 6)}...${game.joiner.slice(-4)}` : '等待中';
     elements.gameInterval.textContent = `${game.intervalTime}秒`;
@@ -529,10 +529,10 @@ async function loadGame(gameId) {
       if (!isMyTurn){
         listenPlaceStoneOnce(gameId, gameState.currentAccount==game.joiner ? game.creator : game.joiner);
       }
+      // 启动计时器
+      startGameTimer();
     }
     
-    // 启动计时器
-    startGameTimer();
   } catch (e) {
     console.error('加载游戏失败:', e);
     showNotification(`加载游戏失败: ${e.message}`, true);
@@ -574,10 +574,13 @@ async function loadMoveHistory(gameId) {
 // 更新游戏状态
 async function updateGameStatus() {
   if (!gameState.currentGame) return;
+  // 获取游戏信息
+  const game = await gameState.contract.getGame(gameState.currentGameId);
+  console.log('加载游戏信息:', game);
+  gameState.currentGame = game;
+  const { finished, winner, joiner } = gameState.currentGame;
   
-  const { isFinished, winner, joiner } = gameState.currentGame;
-  
-  if (isFinished) {
+  if (finished) {
     // 游戏已结束
     elements.gameStatus.textContent = winner === ethers.ZeroAddress ? '游戏结束，平局' : 
       winner.toLowerCase() === gameState.currentAccount.toLowerCase() ? '游戏结束，你获胜了！' : 
@@ -649,13 +652,13 @@ async function isCurrentPlayerTurn() {
 
 // 启动游戏计时器
 function startGameTimer() {
-  if (!gameState.currentGame || gameState.currentGame.isFinished || !gameState.currentGame.joiner) {
-    return;
-  }
-  
   // 清除之前的计时器
   if (gameState.gameTimer) {
     clearInterval(gameState.gameTimer);
+  }
+
+  if (!gameState.currentGame || gameState.currentGame.finished || !gameState.currentGame.joiner) {
+    return;
   }
   
   // 更新时间的函数
@@ -664,10 +667,9 @@ function startGameTimer() {
     
     const { lastMoveTime, intervalTime, startTime } = gameState.currentGame;
     // 确定基准时间（最后落子时间或开始时间）
-    const baseTime = lastMoveTime > 0n ? lastMoveTime : startTime;
-    const baseTimeSec = Number(baseTime) / 1000; // 转换为秒
+    const baseTimeSec = lastMoveTime > 0n ? lastMoveTime : startTime;
     const now = Date.now() / 1000;
-    const elapsed = now - baseTimeSec;
+    const elapsed = now - Number(baseTimeSec);
     const remaining = Math.max(0, Number(intervalTime) - elapsed);
     
     // 格式化时间
@@ -765,7 +767,6 @@ function addMoveHistory(player, x, y, isCurrentPlayer) {
   moveEl.innerHTML = `
     <div class="flex justify-between items-center">
       <span>${player}</span>
-      <span class="text-xs text-neutral-500">${new Date().toLocaleTimeString()}</span>
     </div>
     <div class="text-sm">落子位置: (${x}, ${y})</div>
   `;
@@ -784,7 +785,7 @@ function listenJoinGameOnce(gameId){
   const joinCallback = (event) => {
     const { _gameId, joiner } = event.args;
     if (_gameId.toString() === gameId) {
-      showNotification(`${joiner.slice(0, 6)}... 已加入游戏，准备开始！`);
+      showNotification(`${joiner.slice(0, 6)}... 已加入游戏，请落子！`);
       
       // 如果是当前查看的游戏，刷新游戏状态
       if (gameState.currentGameId === gameId) {
