@@ -235,14 +235,14 @@ contract QyGomoku is ERC20, Ownable {
             
             // 正方向查找（复用变量）
             for (uint8 step = 1; step < 5; step++) {
-                assembly { stepInt := step } // 复用stepInt
-                newX = nx + dirs[0][dir] * stepInt; // 复用newX
-                newY = ny + dirs[1][dir] * stepInt; // 复用newY
+                assembly { stepInt := step }
+                newX = nx + dirs[0][dir] * stepInt;
+                newY = ny + dirs[1][dir] * stepInt;
                 
                 if (newX < 0 || newX >= 15 || newY < 0 || newY >= 15) break;
 
-                assembly { newXUint := newX } // 复用newXUint
-                assembly { newYUint := newY } // 复用newYUint
+                assembly { newXUint := newX } 
+                assembly { newYUint := newY }
                 if (gameBoard[gameId][newXUint][newYUint] == playerMark) {
                     count++;
                 } else {
