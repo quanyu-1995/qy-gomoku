@@ -34,16 +34,25 @@ contract QyGomokuTest is Test {
         console.log(unicode"test_createGame 操作消耗的 gas: %s", startGas - endGas);
 
         startGas = gasleft();
+        test_getGames(0);
+        endGas = gasleft();
+        console.log(unicode"test_getGames 操作消耗的 gas: %s", startGas - endGas);
+
+        startGas = gasleft();
         test_joinGame();
         endGas = gasleft();
         console.log(unicode"test_joinGame 操作消耗的 gas: %s", startGas - endGas);
         
+        startGas = gasleft();
+        test_getGames(1);
+        endGas = gasleft();
+        console.log(unicode"test_getGames 操作消耗的 gas: %s", startGas - endGas);
         // test_printGame();
         
-        startGas = gasleft();
-        test_placeStone();
-        endGas = gasleft();
-        console.log(unicode"test_placeStone 操作消耗的 gas: %s", startGas - endGas);
+        // startGas = gasleft();
+        // test_placeStone();
+        // endGas = gasleft();
+        // console.log(unicode"test_placeStone 操作消耗的 gas: %s", startGas - endGas);
 
         console.log("U1 balance:", qyGomoku.balanceOf(u1));
         console.log("U2 balance:", qyGomoku.balanceOf(u2));
@@ -98,6 +107,25 @@ contract QyGomokuTest is Test {
         qyGomoku.joinGame(gameId);
         // assertEq(qyGomoku.balanceOf(u2), 900); // 剩余900代币
         printBoard(gameId);
+    }
+
+    function test_getGames(uint8 mode) public {
+        vm.prank(u1);
+        QyGomoku.GameQueryResult memory result = qyGomoku.getGames(1,10,mode);
+        uint256[] memory games = result.gameIds;
+        string memory gamesStr = "gamesStr: ";
+        for (uint256 i = 0; i < games.length; i++) {
+            gamesStr = string(
+                abi.encodePacked(
+                    gamesStr,
+                    uint2str(games[i]), 
+                    ", "
+                )
+            );
+        }
+        console.log(gamesStr);
+        console.log(result.totalCount);
+        console.log(result.totalPages);
     }
 
     function test_placeStone() public {
@@ -164,6 +192,16 @@ contract QyGomokuTest is Test {
         console.log(unicode"----------placeStone %s, %s gas: %s", 11, 7, startGas - endGas);
         printBoard(gameId);
 
+    }
+
+    function uint2str(uint256 value) internal pure returns (string memory) {
+        if (value == 0) return "0";
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) { digits++; temp /= 10; }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) { digits--; buffer[digits] = bytes1(uint8(48 + (value % 10))); value /= 10; }
+        return string(buffer);
     }
 
     function printBoard(uint256 gameId) internal {

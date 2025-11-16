@@ -6,23 +6,25 @@ const contractABI = [
     'function balanceOf(address account) view returns (uint256)',
     'function createGame(uint256 stake, uint32 intervalTime) returns (uint256)',
     'function cancelGame(uint256 _gameId)',
-    'function getJoinableGames(uint256 page, uint256 pageSize) view returns (uint256[])',
+    'function getGames(uint256 page, uint256 pageSize, uint8 mode) view returns (tuple(uint256[] gameIds, uint256 totalCount, uint256 totalPages))',
     'function joinGame(uint256 _gameId)',
     'function placeStone(uint256 _gameId, uint8 x, uint8 y)',
     'function trySettleTimeout(uint256 _gameId)',
     'function approve(address spender, uint256 value) returns (bool)',
     'function getGame(uint256 _gameId) view returns (address creator, address joiner, address currentPlayer, uint256 stake, bool started, bool finished, address winner, uint32 intervalTime, uint32 lastMoveTime)',
+    'function getMyGame() view returns (uint256)',
     'function getBoardCell(uint256 gameId, uint8 x, uint8 y) view returns (uint8)',
     'function getBoard(uint256 gameId) view returns (uint8[][])',
 
 
+    'event GameCreated(uint256 gameId, uint256 stake, uint32 intervalTime, address creator)',
     'event JoinGame(uint256 indexed _gameId, address joiner)',
     'event PlaceStone(uint256 indexed _gameId, address indexed player, uint8 x, uint8 y)',
     'event GameFinished(uint256 indexed _gameId, address winner)',
     'event SettleTimeout(uint256 indexed _gameId, address winner)'
 ];
 
-const contractAddress = '0x203f6ad5f29710d349449fcf143dc70cce33ace4';
+const contractAddress = '0x86a53e9ea51e7204b6aba012eb00b9f42946a535';
 
 const elements = {
   // view
@@ -45,6 +47,9 @@ const elements = {
   listGames: document.getElementById('listGames'),
   page: document.getElementById('page'),
   pageSize: document.getElementById('pageSize'),
+  queryMode: document.getElementById('queryMode'),
+  totalCount: document.getElementById('totalCount'),
+  totalPages: document.getElementById('totalPages'),
   gamesList: document.getElementById('gamesList'),
   
   // load
@@ -63,6 +68,7 @@ const elements = {
   gameInterval: document.getElementById('game-interval'),
   moveHistory: document.getElementById('move-history'),
   gameSettle: document.getElementById('game-settle'),
+  cancelGame: document.getElementById('game-cancel'),
   
   // coin management
   refreshBalance: document.getElementById('refreshBalance'),
@@ -91,7 +97,8 @@ const gameState = {
   gameTimer: null,
   eventListeners: {},
   isListeningCreator: false,
-  isListeningJoiner: false
+  isListeningJoiner: false,
+  queryMode: 0
 };
 
 function showNotification(message, isError = false) {
@@ -101,7 +108,7 @@ function showNotification(message, isError = false) {
   
   setTimeout(() => {
     elements.notification.className = 'fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center';
-  }, 5000);
+  }, 10000);
 }
 
 function switchView(viewName) {
@@ -199,7 +206,7 @@ async function mint() {
     elements.mintAmount.value = '';
   } catch (e) {
     console.error('Mint failed:', e);
-    showNotification(`Mint failed: ${e?.data?.message || e.message}`, true);
+    showNotification(`Mint failed: ${e?.info?.error?.data?.message || e?.data?.message || e.message}`, true);
   }
 }
 
@@ -230,7 +237,7 @@ async function burn() {
     elements.burnAmount.value = '';
   } catch (e) {
     console.error('Burn failed:', e);
-    showNotification(`Burn failed: ${e?.data?.message || e.message}`, true);
+    showNotification(`Burn failed: ${e?.info?.error?.data?.message || e?.data?.message || e.message}`, true);
   }
 }
 
@@ -315,20 +322,23 @@ async function createGame() {
     await approveTx.wait();
     
     showNotification('Creating game...');
-    const gameId = await gameState.contract.createGame(stakeWei, interval);
+    const createGameTx = await gameState.contract.createGame(stakeWei, interval);
+    const cgResult = await createGameTx.wait();
+
+    const { gameId } = gameState.contract.interface.parseLog(cgResult.logs[1]).args
     // const receipt = await tx.wait();
     showNotification(`Game created successfully! ID: ${gameId}`);
-    
-    await loadGame(gameId);
+    const gameIdNum = Number(gameId);
+    await loadGame(gameIdNum);
     
     // Automatically fill in the input box for loading game ID
-    elements.loadGameId.value = gameId;
+    elements.loadGameId.value = gameIdNum;
     
     // Refresh game list
     listGames();
   } catch (e) {
     console.error('Game creation failed:', e);
-    showNotification(`Game creation failed: ${e?.data?.message || e.message}`, true);
+    showNotification(`Game creation failed: ${e?.info?.error?.data?.message || e?.data?.message || e.message}`, true);
   }
 }
 
@@ -339,38 +349,66 @@ async function listGames() {
   
   const page = Number(elements.page.value || 1);
   const pageSize = Number(elements.pageSize.value || 5);
+  const mode = Number(elements.queryMode.value || 0);
   
   try {
     elements.gamesList.innerHTML = '<div class="col-span-full text-center py-8"><i class="fa fa-spinner fa-spin text-primary"></i> loading...</div>';
     
-    const ids = await gameState.contract.getJoinableGames(page, pageSize);
+    const result = await gameState.contract.getGames(page, pageSize, mode);
+    const { gameIds, totalCount, totalPages } = result;
+    
+    // Update pagination info
+    elements.totalCount.textContent = `Total: ${totalCount}`;
+    elements.totalPages.textContent = `Pages: ${totalPages}`;
     
     elements.gamesList.innerHTML = '';
     
-    if (!ids || ids.length === 0) {
-      elements.gamesList.innerHTML = '<div class="col-span-full text-neutral-500 italic">There are no games to join</div>';
+    if (!gameIds || gameIds.length === 0) {
+      const modeText = mode === 0 ? 'to join' : mode === 1 ? 'in history' : 'in the system';
+      elements.gamesList.innerHTML = `<div class="col-span-full text-neutral-500 italic">There are no games ${modeText}</div>`;
       return;
     }
     
     // Batch obtain game information
-    for (const id of ids) {
+    for (const id of gameIds) {
       try {
         const game = await gameState.contract.getGame(id);
         const gameEl = document.createElement('div');
         gameEl.className = 'game-card';
+        
+        let statusBadge = '';
+        let actionButton = '';
+        
+        if (mode === 0) {
+          // Joinable games
+          statusBadge = '<span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Joinable</span>';
+          actionButton = `<button class="join-game-btn btn-primary w-full text-sm" data-game-id="${id}"><i class="fa fa-sign-in mr-1"></i>Join</button>`;
+        } else if (mode === 1) {
+          // My history games
+          const statusText = game.finished ? 'Finished' : 'In Progress';
+          const statusClass = game.finished ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800';
+          statusBadge = `<span class="px-2 py-1 ${statusClass} rounded-full text-xs">${statusText}</span>`;
+          actionButton = `<button class="load-game-btn btn-primary w-full text-sm" data-game-id="${id}"><i class="fa fa-download mr-1"></i>Load</button>`;
+        } else {
+          // All games
+          const statusText = game.finished ? 'Finished' : game.started ? 'In Progress' : 'Waiting';
+          const statusClass = game.finished ? 'bg-blue-100 text-blue-800' : game.started ? 'bg-yellow-100 text-yellow-800' : 'bg-neutral-100 text-neutral-800';
+          statusBadge = `<span class="px-2 py-1 ${statusClass} rounded-full text-xs">${statusText}</span>`;
+          actionButton = `<button class="load-game-btn btn-primary w-full text-sm" data-game-id="${id}"><i class="fa fa-download mr-1"></i>Load</button>`;
+        }
+        
         gameEl.innerHTML = `
           <div class="flex justify-between items-start mb-2">
             <h3 class="font-bold">Game #${id}</h3>
-            <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Joinable</span>
+            ${statusBadge}
           </div>
           <div class="space-y-1 text-sm mb-3">
             <div>Creator: ${game.creator.slice(0, 6)}...${game.creator.slice(-4)}</div>
             <div>Bet Amount: ${ethers.formatEther(game.stake)} QYC</div>
             <div>Thinking time: ${game.intervalTime} seconds</div>
+            ${game.joiner && game.joiner !== ethers.ZeroAddress ? `<div>Opponent: ${game.joiner.slice(0, 6)}...${game.joiner.slice(-4)}</div>` : ''}
           </div>
-          <button class="join-game-btn btn-primary w-full text-sm" data-game-id="${id}">
-            <i class="fa fa-sign-in mr-1"></i>Join
-          </button>
+          ${actionButton}
         `;
         elements.gamesList.appendChild(gameEl);
       } catch (e) {
@@ -382,6 +420,13 @@ async function listGames() {
       btn.addEventListener('click', async () => {
         const gameId = btn.dataset.gameId;
         await joinGame(gameId);
+      });
+    });
+    
+    document.querySelectorAll('.load-game-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const gameId = btn.dataset.gameId;
+        await loadGame(gameId);
       });
     });
   } catch (e) {
@@ -416,7 +461,18 @@ async function joinGame(gameId) {
     await loadGame(gameId);
   } catch (e) {
     console.error('join failed:', e);
-    showNotification(`join failed: ${e?.data?.message || e.message}`, true);
+    showNotification(`join failed: ${e?.info?.error?.data?.message || e?.data?.message || e.message}`, true);
+  }
+}
+
+async function loadMyGame(){
+  if (!gameState.contract) {
+    return showNotification('Please connect the wallet first', true);
+  }
+  const gameId = await gameState.contract.getMyGame();
+  const gameIdNum = Number(gameId);
+  if(gameIdNum>0){
+    loadGame(gameIdNum);
   }
 }
 
@@ -524,7 +580,7 @@ async function updateGameStatus() {
   const { finished, winner, joiner } = gameState.currentGame;
   
   if (finished) {
-    elements.gameStatus.textContent = winner === ethers.ZeroAddress ? 'Game over, tie' : 
+    elements.gameStatus.textContent = winner === ethers.ZeroAddress ? 'The game has been canceled' : 
       winner.toLowerCase() === gameState.currentAccount.toLowerCase() ? 'The game is over, you have won!' : 
       'The game is over, you lost';
     
@@ -532,15 +588,15 @@ async function updateGameStatus() {
       winner.toLowerCase() === gameState.currentAccount.toLowerCase() ? 'px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-medium' :
       'px-4 py-2 bg-red-100 text-red-800 rounded-full text-sm font-medium';
       
-    elements.currentPlayer.textContent = 'The game is over';
+    elements.currentPlayer.textContent = winner === ethers.ZeroAddress ? 'The game has been canceled' : 'The game is over';
     elements.currentPlayer.className = 'inline-block px-3 py-1 bg-neutral-100 rounded-full text-sm font-medium';
     
     if (gameState.gameTimer) {
       clearInterval(gameState.gameTimer);
       gameState.gameTimer = null;
-      elements.timeLeft.textContent = 'The game is over';
+      elements.timeLeft.textContent = winner === ethers.ZeroAddress ? 'The game has been canceled' : 'The game is over';
     }
-  } else if (!joiner) {
+  } else if (joiner===ethers.ZeroAddress) {
     // Waiting for opponents to join
     elements.gameStatus.textContent = 'Waiting for opponents to join...';
     elements.gameStatus.className = 'px-4 py-2 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium';
@@ -662,7 +718,7 @@ async function placeStone(gameId, x, y) {
     showNotification(`Successfully placed (${x}, ${y})`);
   } catch (e) {
     console.error('Failed to place:', e);
-    showNotification(`Failed to place: ${e?.data?.message || e.message}`, true);
+    showNotification(`Failed to place: ${e?.info?.error?.data?.message || e?.data?.message || e.message}`, true);
   }
 }
 
@@ -685,8 +741,35 @@ async function trySettle(gameId) {
       await loadGame(gameId);
     }
   } catch (e) {
-    console.error('settlement failed:', e);
-    showNotification(`settlement failed: ${e?.data?.message || e.message}`, true);
+    console.error('settlement failed:', e?.info?.error?.data?.message || e?.data?.message || e.message);
+    showNotification(`settlement failed: ${e?.info?.error?.data?.message || e?.data?.message || e.message}`, true);
+  }
+}
+
+async function tryCancel(gameId) {
+  if (!gameState.contract) {
+    return showNotification('Please connect the wallet first', true);
+  }
+  
+  if (!gameId || isNaN(gameId)) {
+    return showNotification('Please enter a valid game ID', true);
+  }
+  
+  try {
+    showNotification(`Attempting to cancel the game #${gameId}...`);
+    const tx = await gameState.contract.cancelGame(gameId);
+    await tx.wait();
+    showNotification(`Game # ${gameId} cancellation successful`);
+    
+    if (gameState.currentGameId === gameId) {
+      await loadGame(gameId);
+    }
+    
+    // Refresh game list
+    listGames();
+  } catch (e) {
+    console.error('cancellation failed:', e);
+    showNotification(`cancellation failed: ${e?.info?.error?.data?.message || e?.data?.message || e.message}`, true);
   }
 }
 
@@ -725,7 +808,7 @@ function listenPlaceStoneOnce(gameId, player){
   const placeStoneFilter = gameState.contract.filters.PlaceStone(gameId, player);
   const placeStoneCallback = (event) => {
     const { _gameId, player, x, y } = event.args;
-    if (_gameId.toString() === gameId) {
+    if (_gameId == gameId) {
       const isCurrentPlayer = player.toLowerCase() === gameState.currentAccount.toLowerCase();
       const playerDesc = isCurrentPlayer ? 'You' : `${player.slice(0, 6)}...`;
       
@@ -783,7 +866,10 @@ function listenSettleTimeoutOnce(gameId){
 function bindEvents() {
   // Navigation toggle
   elements.lobbyTab.addEventListener('click', () => switchView('lobby'));
-  elements.gameTab.addEventListener('click', () => switchView('game'));
+  elements.gameTab.addEventListener('click', () => {
+    loadMyGame();
+    switchView('game');
+  });
   
   // Wallet connection
   elements.connect.addEventListener('click', connectWallet);
@@ -800,6 +886,13 @@ function bindEvents() {
   
   // list Games
   elements.listGames.addEventListener('click', listGames);
+  
+  // query mode change
+  elements.queryMode.addEventListener('change', () => {
+    gameState.queryMode = Number(elements.queryMode.value);
+    elements.page.value = 1; // Reset to first page when changing mode
+    listGames();
+  });
   
   // load Game
   elements.loadGameBtn.addEventListener('click', () => {
@@ -819,6 +912,12 @@ function bindEvents() {
   elements.gameSettle.addEventListener('click', () => {
     if (gameState.currentGameId) {
       trySettle(gameState.currentGameId);
+    }
+  });
+  
+  elements.cancelGame.addEventListener('click', () => {
+    if (gameState.currentGameId) {
+      tryCancel(gameState.currentGameId);
     }
   });
 }

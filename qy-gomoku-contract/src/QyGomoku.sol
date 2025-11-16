@@ -19,6 +19,13 @@ contract QyGomoku is ERC20, Ownable {
         uint32 lastMoveTime;
     }
 
+    struct GameQueryResult {
+        uint256[] gameIds;
+        uint256 totalCount;
+        uint256 totalPages;
+    }
+
+    event GameCreated(uint256 gameId, uint256 stake, uint32 intervalTime, address creator);
     event JoinGame(uint256 indexed _gameId, address joiner);
     event PlaceStone(uint256 indexed _gameId, address indexed player, uint8 x, uint8 y);
     event GameFinished(uint256 indexed _gameId, address winner);
@@ -79,6 +86,7 @@ contract QyGomoku is ERC20, Ownable {
         joinableHead = nextGameId;
         
         nextGameId++;
+        emit GameCreated(nextGameId - 1, stake, intervalTime, msg.sender);
         return nextGameId - 1;
     }
     
@@ -94,34 +102,69 @@ contract QyGomoku is ERC20, Ownable {
         delete userGame[msg.sender];
     }
 
-    function getJoinableGames(uint256 page, uint256 pageSize) external view returns (uint256[] memory) {
+    // mode: 0 = joinable games, 1 = my history (settled games involving msg.sender), 2 = all games
+    function getGames(uint256 page, uint256 pageSize, uint8 mode) external view returns (GameQueryResult memory) {
         require(pageSize > 0 && page > 0, "Invalid page params");
-        
+
         uint256[] memory result = new uint256[](pageSize);
         uint256 count = 0;
-        uint256 current = joinableHead;
         uint256 skip = (page - 1) * pageSize;
         uint256 processed = 0;
-        
-        while (current != 0 && count < pageSize) {
-            Game storage game = games[current];
-            if (game.creator != address(0) && !game.started && !game.finished && game.joiner == address(0)) {
-                if (processed >= skip) {
-                    result[count++] = current;
+        uint256 totalCount = 0;
+
+        if (mode == 0) {
+            // joinable list (iterate linked list)
+            uint256 current = joinableHead;
+            while (current != 0) {
+                Game storage game = games[current];
+                if (game.creator != address(0) && !game.started && !game.finished && game.joiner == address(0)) {
+                    if (processed >= skip && count < pageSize) {
+                        result[count++] = current;
+                    }
+                    processed++;
+                    totalCount++;
+                }
+                current = joinableNext[current];
+            }
+        } else if (mode == 1) {
+            // my history (settled games involving caller)
+            for (uint256 i = 1; i < nextGameId; i++) {
+                if (userGameHistory[msg.sender][i]) {
+                    totalCount++;
+                    if (processed >= skip && count < pageSize) {
+                        result[count++] = i;
+                    }
+                    processed++;
+                }
+            }
+            if (userGame[msg.sender] != 0) {
+                totalCount++;
+                if (processed >= skip && count < pageSize) {
+                    result[count++] = userGame[msg.sender];
                 }
                 processed++;
             }
-            current = joinableNext[current];
-        }
-        if (count < pageSize) {
-            uint256[] memory truncated = new uint256[](count);
-            for (uint256 i = 0; i < count; i++) {
-                truncated[i] = result[i];
+        } else {
+            // all games (iterate by id)
+            for (uint256 i = 1; i < nextGameId; i++) {
+                Game storage game = games[i];
+                if (game.creator != address(0)) {
+                    totalCount++;
+                    if (processed >= skip && count < pageSize) {
+                        result[count++] = i;
+                    }
+                    processed++;
+                }
             }
-            return truncated;
         }
-        
-        return result;
+
+        uint256[] memory truncated = new uint256[](count);
+        for (uint256 i = 0; i < count; i++) {
+            truncated[i] = result[i];
+        }
+
+        uint256 totalPages = (totalCount + pageSize - 1) / pageSize;
+        return GameQueryResult(truncated, totalCount, totalPages);
     }
 
     function joinGame(uint256 _gameId) external {
@@ -182,6 +225,10 @@ contract QyGomoku is ERC20, Ownable {
         } else {
             revert("Not timeout yet");
         }
+    }
+
+    function getMyGame() external view returns (uint256){
+        return userGame[msg.sender];
     }
 
     function getGame(uint256 gameId) external view returns (
